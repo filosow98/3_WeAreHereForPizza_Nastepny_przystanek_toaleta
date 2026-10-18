@@ -1,0 +1,6 @@
+requests>=2.32
+python-dotenv>=1.0
+tenacity>=9.0
+# druk wsadowy ulotek (src/ulotki_pdf.py); po instalacji: python -m playwright install chromium
+playwright>=1.40
+pypdf>=4.0

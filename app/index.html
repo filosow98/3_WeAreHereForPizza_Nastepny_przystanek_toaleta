@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ulotki „Najbliższa toaleta”</title>
+  <link rel="icon" type="image/jpeg" href="img/wc_syrenka.jpeg">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="ulotka.css">
+</head>
+<body>
+  <div class="ui pasek">
+    <strong class="logo"><img src="img/wc_syrenka.jpeg" alt="">Ulotki „Najbliższa toaleta”</strong>
+    <div class="szukaj">
+      <input id="szukaj" type="search" autocomplete="off"
+             placeholder="Nazwa albo nr przystanku, np. Centrum albo 7013-01">
+      <ul id="wyniki" hidden></ul>
+    </div>
+    <button id="drukuj" class="glowny">Drukuj / zapisz PDF</button>
+    <select id="dzielnica" aria-label="Druk ulotek dla dzielnicy">
+      <option value="">Druk dzielnicy…</option>
+    </select>
+    <a href="mapa.html">Mapa luk →</a>
+  </div>
+  <main id="podglad"></main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="ulotka.js"></script>
+  <script>
+    const podglad = document.getElementById("podglad");
+    const pole = document.getElementById("szukaj");
+    const wyniki = document.getElementById("wyniki");
+
+    // „Plac Bankowy 01” → „plac bankowy 01”, bez polskich znaków
+    const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ł/g, "l");
+    // ZTM skraca nazwy: „Pl. Bankowy”, „Dw. Centralny” — szukamy też po pełnych słowach
+    const SKROTY = { "pl.": "plac", "dw.": "dworzec", "al.": "aleja aleje", "os.": "osiedle", "cm.": "cmentarz",
+      "ks.": "ksiedza", "sw.": "swietego swietej", "gen.": "generala", "pln.": "polnoc polnocna", "pld.": "poludnie poludniowa" };
+    const rozwin = (s) => s + " " + s.split(/\s+/).map((w) => SKROTY[w] || "").join(" ");
+
+    function pokaz(r) {
+      podglad.replaceChildren();
+      Ulotka.renderuj(r, podglad);
+      history.replaceState(null, "", "?id=" + r.id);
+      document.title = "Ulotka: " + r.nazwa + " " + r.id;
+    }
+
+    Ulotka.wczytajUlotki().then((ulotki) => {
+      const indeks = ulotki.map((u) => rozwin(norm(u.nazwa + " " + u.id.split("-")[1] + " " + u.id)));
+      const poId = new Map(ulotki.map((u) => [u.id, u]));
+
+      function szukaj() {
+        const fraza = norm(pole.value.trim());
+        if (!fraza) { wyniki.hidden = true; return []; }
+        const czesci = fraza.split(/\s+/);
+        const trafione = ulotki.filter((u, i) => czesci.every((c) => indeks[i].includes(c))).slice(0, 15);
+        wyniki.replaceChildren(...trafione.map((u) => {
+          const li = document.createElement("li");
+          li.innerHTML = "<strong></strong> <small></small>";
+          li.firstChild.textContent = u.nazwa + " " + u.id.split("-")[1];
+          li.lastChild.textContent = u.id + " · " + u.dzielnica + " · toaleta " + Ulotka.odleglosc(u.glowna.odl_m);
+          li.onclick = () => { pokaz(u); wyniki.hidden = true; pole.value = ""; };
+          return li;
+        }));
+        wyniki.hidden = trafione.length === 0;
+        return trafione;
+      }
+      pole.addEventListener("input", szukaj);
+      pole.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { const [pierwszy] = szukaj(); if (pierwszy) { pokaz(pierwszy); wyniki.hidden = true; pole.value = ""; } }
+        if (e.key === "Escape") wyniki.hidden = true;
+      });
+
+      const select = document.getElementById("dzielnica");
+      [...new Set(ulotki.map((u) => u.dzielnica))].sort((a, b) => a.localeCompare(b, "pl")).forEach((d) => {
+        const n = ulotki.filter((u) => u.dzielnica === d).length;
+        select.add(new Option(d + " (" + n + ")", d));
+      });
+      select.onchange = () => { if (select.value) location.href = "druk.html?dzielnica=" + encodeURIComponent(select.value); };
+
+      const id = new URLSearchParams(location.search).get("id");
+      pokaz(poId.get(id) || ulotki.find((u) => u.id === "7013-01") || ulotki[0]);
+    }).catch((e) => {
+      podglad.innerHTML = '<p class="komunikat"></p>';
+      podglad.firstChild.textContent = e.message;
+    });
+
+    document.getElementById("drukuj").onclick = () => window.print();
+  </script>
+</body>
+</html>

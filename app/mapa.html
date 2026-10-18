@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mapa luk toaletowych</title>
+  <link rel="icon" type="image/jpeg" href="img/wc_syrenka.jpeg">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="app.css">
+  <style>
+    body { height: 100vh; display: flex; flex-direction: column; }
+    .uklad { flex: 1; display: grid; grid-template-columns: 360px 1fr; min-height: 0; }
+    #mapa { min-height: 400px; }
+    #mapa .leaflet-tile-pane { filter: grayscale(1) brightness(1.06) contrast(0.85); } /* tło nie konkuruje z danymi */
+    .panel { overflow-y: auto; padding: 16px; background: var(--ui-panel); border-right: 1px solid var(--ui-linia); }
+    .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--ui-tusz-2); margin: 18px 0 8px; }
+    .panel h2:first-child { margin-top: 0; }
+    .warianty label { display: flex; gap: 8px; padding: 5px 0; font-size: 15px; cursor: pointer; }
+    .warianty small { display: block; color: var(--ui-tusz-2); font-size: 13px; }
+    .zasieg { display: flex; align-items: center; gap: 10px; }
+    .zasieg input { flex: 1; }
+    .opis { font-size: 13px; color: var(--ui-tusz-2); margin: 4px 0 0; }
+    select { font: inherit; font-size: 15px; width: 100%; padding: 6px 8px; border: 1px solid var(--ui-linia); border-radius: 6px; background: #fff; }
+    .kafel { background: #fff; border: 1px solid var(--ui-linia); border-radius: 8px; padding: 12px 14px; margin-top: 14px; }
+    .kafel .liczba { font-size: 44px; font-weight: 700; line-height: 1; }
+    .kafel p { margin: 6px 0 0; font-size: 15px; }
+    .kafel .opis { margin-top: 8px; }
+    .legenda { list-style: none; padding: 0; margin: 0; display: grid; gap: 4px; font-size: 14px; }
+    .legenda li { display: flex; align-items: center; gap: 8px; }
+    .kropka { width: 11px; height: 11px; border-radius: 50%; border: 1px solid #1d1d1b; flex: none; }
+    .kropka.duza { width: 15px; height: 15px; }
+    .kropka.toaleta { width: 13px; height: 13px; border: 2.5px solid #fff; box-shadow: 0 0 0 1px #1d1d1b; }
+    .przelaczniki label { display: block; font-size: 15px; padding: 3px 0; cursor: pointer; }
+    .slupki { list-style: none; padding: 0; margin: 0; }
+    .slupki li { display: grid; grid-template-columns: 112px 1fr 40px; align-items: center; gap: 8px; font-size: 14px; padding: 3px 4px; border-radius: 4px; cursor: pointer; }
+    .slupki li:hover { background: var(--ui-tlo); }
+    .slupki li.wybrana { font-weight: 700; background: var(--ui-tlo); }
+    .slupki .tor { height: 10px; background: #e9e8e4; border-radius: 0 4px 4px 0; }
+    .slupki .belka { height: 100%; background: #d9472c; border-radius: 0 4px 4px 0; }
+    .slupki .wartosc { text-align: right; font-variant-numeric: tabular-nums; }
+    .leaflet-popup-content { font-family: "Atkinson Hyperlegible", system-ui, sans-serif; font-size: 14px; }
+    .leaflet-popup-content a { font-weight: 700; }
+    @media (max-width: 760px) {
+      body { height: auto; }
+      .uklad { grid-template-columns: 1fr; }
+      #mapa { height: 70vh; order: -1; }
+      .panel { border-right: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="pasek">
+    <strong class="logo"><img src="img/wc_syrenka.jpeg" alt="">Luka toaletowa: przystanki bez toalety w zasięgu</strong>
+    <a href="index.html">Ulotki do druku →</a>
+  </div>
+  <div class="uklad">
+    <aside class="panel">
+      <h2>Jaka toaleta się liczy?</h2>
+      <div class="warianty" id="warianty"></div>
+
+      <h2>Zasięg</h2>
+      <div class="zasieg">
+        <input type="range" id="zasieg" min="180" max="1800" step="60" value="600" aria-label="Zasięg w metrach pieszo">
+        <strong id="zasieg-m">600 m</strong>
+      </div>
+      <p class="opis" id="zasieg-opis"></p>
+
+      <h2>Obszar</h2>
+      <select id="dzielnica"><option value="">Cała Warszawa</option></select>
+
+      <div class="kafel">
+        <div class="liczba" id="odsetek">–</div>
+        <p id="odsetek-opis"></p>
+        <p class="opis" id="mediana"></p>
+      </div>
+
+      <h2>Odległość słupka od toalety</h2>
+      <ul class="legenda" id="legenda"></ul>
+      <div class="przelaczniki">
+        <label><input type="checkbox" id="tylko-luki"> Tylko słupki poza zasięgiem</label>
+        <label><input type="checkbox" id="pokaz-toalety" checked> Pokaż toalety (niebieskie)</label>
+      </div>
+
+      <h2>Dzielnice: słupki bez toalety w zasięgu</h2>
+      <ul class="slupki" id="dzielnice"></ul>
+
+      <p class="opis" style="margin-top:16px">
+        Odległość pieszo po chodnikach (OpenStreetMap, OSRM), jak na ulotkach. Dane: dane.um.warszawa.pl
+        (przystanki ZTM, toalety: kwiecień 2026). Granice dzielnic: OSM. Metoda: docs/14.
+      </p>
+    </aside>
+    <div id="mapa"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script>
+    // Mapa tylko wyświetla: odległości liczy src/ulotki_dane.py (app/dane/mapa.json).
+    const WARIANTY = {
+      // [etykieta, opis, „słupków nie ma ___ w zasięgu”]
+      wszystkie: ["Wszystkie", "każda toaleta z miejskiego zbioru", "żadnej toalety"],
+      bezplatna: ["Bezpłatna", "", "bezpłatnej toalety"],
+      dostepna: ["Dla osób z niepełnosprawnością", "dostępna dla wózków", "toalety dostępnej dla wózków"],
+      niedziela: ["Czynna w niedzielę", "każda toaleta czynna w niedzielę", "toalety czynnej w niedzielę"],
+    };
+    // Blisko → zielony, daleko → czerwony. Kolory po obu stronach progu zasięgu
+    // różnią się też jasnością (czytelne przy daltonizmie), a słupki poza
+    // zasięgiem są większe — kolor nie jest jedyną informacją.
+    const KOLORY = ["#00703c", "#9fd36b", "#d9472c", "#8b0a1f"];
+    const TOALETA = "#2a78d6";
+    const TEMPO_SENIORA = 1.0; // m/s, jak w ulotki_dane.py
+    const minuty = (m) => Math.max(1, Math.ceil(m / TEMPO_SENIORA / 60));
+
+    const stan = { wariant: 0, zasieg: 600, dzielnica: "", tylkoLuki: false, toalety: true };
+    const fmt = (n) => n.toLocaleString("pl-PL");
+    const metry = (m) => (m >= 1000 ? (m / 1000).toFixed(1).replace(".", ",") + " km" : m + " m");
+
+    const mapa = L.map("mapa", { preferCanvas: true }).setView([52.23, 21.01], 11);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(mapa);
+    const promien = (bazowy) => { const z = mapa.getZoom(); return z >= 15 ? bazowy + 3 : z >= 13 ? bazowy + 1 : bazowy - 1; };
+    const warstwaSlupkow = L.layerGroup().addTo(mapa);
+    const warstwaToalet = L.layerGroup().addTo(mapa);
+
+    Promise.all([fetch("dane/mapa.json").then((r) => r.json()), fetch("dane/toalety.json").then((r) => r.json())])
+      .then(([dane, toalety]) => start(dane, toalety))
+      .catch(() => alert(location.protocol === "file:"
+        ? "Strona otwarta z dysku, więc przeglądarka blokuje wczytanie danych. Uruchom serwer: " +
+          "uv run python -m http.server 8000 --directory app i otwórz http://localhost:8000/mapa.html"
+        : "Brak danych w app/dane/ — uruchom src/ulotki_dane.py"));
+
+    function start(dane, toalety) {
+      const slupki = dane.przystanki;
+      const klucze = dane.warianty;
+
+      // panel: warianty z liczbą toalet
+      const kontener = document.getElementById("warianty");
+      klucze.forEach((k, i) => {
+        const n = toalety.filter((t) => t.warianty.includes(k)).length;
+        const label = document.createElement("label");
+        label.innerHTML = '<input type="radio" name="wariant"><span><span class="t"></span><small></small></span>';
+        label.querySelector("input").checked = i === stan.wariant;
+        label.querySelector("input").onchange = () => { stan.wariant = i; rysuj(); };
+        label.querySelector(".t").textContent = WARIANTY[k][0] + " (" + fmt(n) + ")";
+        label.querySelector("small").textContent = WARIANTY[k][1];
+        kontener.append(label);
+      });
+
+      const suwak = document.getElementById("zasieg");
+      suwak.oninput = () => { stan.zasieg = Number(suwak.value); rysuj(); };
+      document.getElementById("tylko-luki").onchange = (e) => { stan.tylkoLuki = e.target.checked; rysuj(); };
+      document.getElementById("pokaz-toalety").onchange = (e) => { stan.toalety = e.target.checked; rysuj(); };
+
+      const nazwyDzielnic = [...new Set(slupki.map((s) => s.dzielnica))].sort((a, b) => a.localeCompare(b, "pl"));
+      const select = document.getElementById("dzielnica");
+      nazwyDzielnic.forEach((d) => select.add(new Option(d, d)));
+      select.onchange = () => wybierzDzielnice(select.value);
+
+      function wybierzDzielnice(d) {
+        stan.dzielnica = d;
+        select.value = d;
+        const widoczne = slupki.filter((s) => !d || s.dzielnica === d);
+        mapa.fitBounds(widoczne.map((s) => [s.lat, s.lon]), { padding: [30, 30] });
+        rysuj();
+      }
+
+      function klasa(odl) {
+        const R = stan.zasieg;
+        return odl <= R / 2 ? 0 : odl <= R ? 1 : odl <= 2 * R ? 2 : 3;
+      }
+
+      function rysuj() {
+        const w = stan.wariant, R = stan.zasieg;
+        document.getElementById("zasieg-m").textContent = R + " m";
+        document.getElementById("zasieg-opis").textContent =
+          "pieszo, ok. " + minuty(R) + " min tempem seniora";
+
+        // kafel z liczbą
+        const obszar = slupki.filter((s) => !stan.dzielnica || s.dzielnica === stan.dzielnica);
+        const luki = obszar.filter((s) => s.d[w] > R).length;
+        const odl = obszar.map((s) => s.d[w]).sort((a, b) => a - b);
+        document.getElementById("odsetek").textContent = Math.round((100 * luki) / obszar.length) + "%";
+        document.getElementById("odsetek-opis").textContent =
+          "słupków " + (stan.dzielnica ? "w dzielnicy " + stan.dzielnica + " " : "") +
+          "nie ma " + WARIANTY[klucze[w]][2] + " w zasięgu " + R + " m";
+        document.getElementById("mediana").textContent =
+          fmt(luki) + " z " + fmt(obszar.length) + " słupków · mediana odległości " + metry(odl[Math.floor(odl.length / 2)]);
+
+        // legenda zależna od zasięgu
+        const progi = ["do " + R / 2 + " m", R / 2 + "–" + R + " m", R + "–" + 2 * R + " m", "ponad " + 2 * R + " m"];
+        document.getElementById("legenda").innerHTML = progi
+          .map((p, i) => '<li><span class="kropka' + (i >= 2 ? " duza" : "") + '" style="background:' + KOLORY[i] + '"></span>' + p + (i >= 2 ? " · poza zasięgiem" : "") + "</li>")
+          .join("") + '<li><span class="kropka toaleta" style="background:' + TOALETA + '"></span>toaleta</li>';
+
+        // słupki
+        warstwaSlupkow.clearLayers();
+        for (const s of obszar) {
+          if (stan.tylkoLuki && s.d[w] <= R) continue;
+          L.circleMarker([s.lat, s.lon], {
+            radius: promien(klasa(s.d[w]) >= 2 ? 6 : 4.5), color: "#1d1d1b", weight: 1, fillColor: KOLORY[klasa(s.d[w])], fillOpacity: 1,
+          })
+            .bindTooltip(s.nazwa + " " + s.id.split("-")[1] + ": " + metry(s.d[w]) + " pieszo do toalety")
+            .bindPopup(() => popupSlupka(s, toalety[s.t[w]], s.d[w]))
+            .addTo(warstwaSlupkow);
+        }
+
+        // toalety bieżącego wariantu
+        warstwaToalet.clearLayers();
+        if (stan.toalety) {
+          toalety.forEach((t) => {
+            if (!t.warianty.includes(klucze[w])) return;
+            if (stan.dzielnica && t.dzielnica !== stan.dzielnica) return;
+            L.circleMarker([t.lat, t.lon], { radius: promien(5.5), color: "#fff", weight: 2.5, fillColor: TOALETA, fillOpacity: 1 })
+              .bindTooltip("Toaleta: " + t.adres)
+              .bindPopup(() => popupToalety(t))
+              .addTo(warstwaToalet);
+          });
+        }
+
+        // belki dzielnic
+        const wiersze = nazwyDzielnic.map((d) => {
+          const ss = slupki.filter((s) => s.dzielnica === d);
+          return [d, Math.round((100 * ss.filter((s) => s.d[w] > R).length) / ss.length)];
+        }).sort((a, b) => b[1] - a[1]);
+        const lista = document.getElementById("dzielnice");
+        lista.replaceChildren(...wiersze.map(([d, p]) => {
+          const li = document.createElement("li");
+          li.className = d === stan.dzielnica ? "wybrana" : "";
+          li.innerHTML = '<span></span><span class="tor"><span class="belka" style="display:block;width:' + p + '%"></span></span><span class="wartosc">' + p + "%</span>";
+          li.firstChild.textContent = d;
+          li.title = d + ": " + p + "% słupków bez toalety w zasięgu " + R + " m";
+          li.onclick = () => wybierzDzielnice(d === stan.dzielnica ? "" : d);
+          return li;
+        }));
+      }
+
+      function popupSlupka(s, t, d) {
+        const div = document.createElement("div");
+        div.innerHTML = "<strong></strong><br><span class='o'></span><br><span class='a'></span><br><span class='g'></span><br><a>Ulotka do druku →</a>";
+        div.querySelector("strong").textContent = s.nazwa + " " + s.id.split("-")[1] + " (nr " + s.id + ", " + s.dzielnica + ")";
+        div.querySelector(".o").textContent = "Najbliższa toaleta: " + metry(d) + " pieszo, ok. " + minuty(d) + " min";
+        div.querySelector(".a").textContent = t.adres;
+        div.querySelector(".g").textContent = (t.platna ? "płatna · " : "bezpłatna · ") + t.godziny + (t.sezon ? " · sezonowa: " + t.sezon : "");
+        div.querySelector("a").href = "index.html?id=" + s.id;
+        return div;
+      }
+
+      function popupToalety(t) {
+        const div = document.createElement("div");
+        div.innerHTML = "<strong></strong><br><span class='g'></span>";
+        div.querySelector("strong").textContent = t.adres;
+        div.querySelector(".g").textContent = [t.typ, t.platna ? "płatna" : "bezpłatna", t.dla_wozkow ? "dla wózków" : "", t.godziny, t.sezon && "sezonowa: " + t.sezon]
+          .filter(Boolean).join(" · ");
+        return div;
+      }
+
+      mapa.on("zoomend", rysuj);
+      rysuj();
+    }
+  </script>
+</body>
+</html>

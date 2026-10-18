@@ -1,0 +1,43 @@
+/* Interfejs aplikacji (pasek, wyszukiwarka, mapa luk). Wygląd ulotki: ulotka.css */
+
+:root {
+  --ui-tlo: #f3f2ef;
+  --ui-panel: #fcfcfb;
+  --ui-tusz: #1d1d1b;
+  --ui-tusz-2: #5c5b57;
+  --ui-linia: #d9d7d1;
+  --ui-akcent: #2a78d6;
+  font-family: "Atkinson Hyperlegible", system-ui, sans-serif;
+}
+
+body { margin: 0; background: var(--ui-tlo); color: var(--ui-tusz); }
+
+.pasek {
+  position: sticky; top: 0; z-index: 1000;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  padding: 10px 16px; background: var(--ui-panel); border-bottom: 1px solid var(--ui-linia);
+}
+.pasek .logo { display: flex; align-items: center; gap: 8px; font-size: 17px; margin-right: auto; }
+.pasek .logo img { width: 32px; height: 32px; clip-path: circle(34%); transform: scale(1.45); }
+.pasek a, .pasek button, .pasek select {
+  font: inherit; font-size: 15px; color: var(--ui-tusz); text-decoration: none;
+  padding: 7px 12px; border: 1px solid var(--ui-linia); border-radius: 6px; background: #fff; cursor: pointer;
+}
+.pasek button.glowny { background: var(--ui-tusz); color: #fff; border-color: var(--ui-tusz); }
+.pasek .info { font-size: 14px; color: var(--ui-tusz-2); }
+
+.szukaj { position: relative; flex: 1 1 320px; max-width: 460px; }
+.szukaj input {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 16px;
+  padding: 8px 12px; border: 1px solid var(--ui-linia); border-radius: 6px;
+}
+.szukaj ul {
+  position: absolute; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px 0; list-style: none;
+  background: #fff; border: 1px solid var(--ui-linia); border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.15);
+  max-height: 60vh; overflow-y: auto;
+}
+.szukaj li { padding: 7px 12px; cursor: pointer; font-size: 15px; }
+.szukaj li:hover, .szukaj li.aktywny { background: var(--ui-tlo); }
+.szukaj li small { color: var(--ui-tusz-2); }
+
+.komunikat { max-width: 640px; margin: 40px auto; padding: 0 16px; font-size: 17px; }

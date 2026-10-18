@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Druk ulotek</title>
+  <link rel="icon" type="image/jpeg" href="img/wc_syrenka.jpeg">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="ulotka.css">
+</head>
+<body>
+  <!-- Strona dla druku wsadowego: ?ids=4225-03,4225-04 albo ?dzielnica=Wola&od=0&ile=20.
+       src/ulotki_pdf.py czeka na window.gotowe === true i zapisuje PDF. -->
+  <div class="ui pasek">
+    <strong class="logo"><img src="img/wc_syrenka.jpeg" alt="">Druk ulotek</strong>
+    <span class="info" id="info">Wczytuję…</span>
+    <a id="poprzednie" hidden>← Poprzednie</a>
+    <a id="nastepne" hidden>Następne →</a>
+    <button id="drukuj" class="glowny">Drukuj / zapisz PDF</button>
+    <a href="index.html">Pojedyncza ulotka</a>
+  </div>
+  <main id="ulotki"></main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="ulotka.js"></script>
+  <script>
+    window.gotowe = false;
+    window.bledy = [];
+    document.getElementById("drukuj").onclick = () => window.print();
+
+    (async () => {
+      const p = new URLSearchParams(location.search);
+      const info = document.getElementById("info");
+      let lista = await Ulotka.wczytajUlotki();
+
+      if (p.get("ids")) {
+        const ids = new Set(p.get("ids").split(","));
+        lista = lista.filter((u) => ids.has(u.id));
+      } else {
+        const dzielnica = p.get("dzielnica");
+        if (dzielnica) lista = lista.filter((u) => u.dzielnica === dzielnica);
+        const od = Number(p.get("od")) || 0;
+        const ile = Number(p.get("ile")) || 20;
+        const wszystkie = lista.length;
+        lista = lista.slice(od, od + ile);
+        info.textContent = (dzielnica || "Cała Warszawa") + ": ulotki " + (od + 1) + "–" + (od + lista.length) + " z " + wszystkie;
+        const link = (start) => "?" + new URLSearchParams({ ...(dzielnica && { dzielnica }), od: start, ile });
+        if (od > 0) Object.assign(document.getElementById("poprzednie"), { hidden: false, href: link(Math.max(0, od - ile)) });
+        if (od + ile < wszystkie) Object.assign(document.getElementById("nastepne"), { hidden: false, href: link(od + ile) });
+      }
+
+      const main = document.getElementById("ulotki");
+      const mapyOk = await Promise.all(lista.map((u) => Ulotka.renderuj(u, main)));
+      await document.fonts.ready;
+      window.bledy = lista.filter((u, i) => !mapyOk[i]).map((u) => u.id);
+      if (p.get("ids")) info.textContent = lista.length + " ulotek";
+      if (window.bledy.length) info.textContent += " · mapa nie wczytała się: " + window.bledy.join(", ");
+      window.gotowe = true;
+    })();
+  </script>
+</body>
+</html>

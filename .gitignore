@@ -1,0 +1,8 @@
+.env
+.venv/
+__pycache__/
+
+# wygenerowane ulotki PDF (src/ulotki_pdf.py)
+data/out/
+# mapa OSM i pliki lokalnego serwera tras OSRM (src/trasy_piesze.py), ok. 1,5 GB
+data/osrm/
